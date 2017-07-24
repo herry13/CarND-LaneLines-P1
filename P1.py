@@ -45,13 +45,14 @@
 
 # In[98]:
 
+import matplotlib
+matplotlib.use('Agg')
 
 #importing some useful packages
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
-get_ipython().magic('matplotlib inline')
 
 
 # ## Read in an Image
@@ -60,11 +61,11 @@ get_ipython().magic('matplotlib inline')
 
 
 #reading in an image
-image = mpimg.imread('test_images/solidWhiteRight.jpg')
+#image = mpimg.imread('test_images/solidWhiteRight.jpg')
 
 #printing out some stats and plotting
-print('This image is:', type(image), 'with dimensions:', image.shape)
-plt.imshow(image)  # if you wanted to show a single color channel image called 'gray', for example, call as plt.imshow(gray, cmap='gray')
+#print('This image is:', type(image), 'with dimensions:', image.shape)
+#plt.imshow(image)  # if you wanted to show a single color channel image called 'gray', for example, call as plt.imshow(gray, cmap='gray')
 
 
 # ## Ideas for Lane Detection Pipeline
@@ -340,7 +341,6 @@ for fname in os.listdir(input_dir):
 
 # Import everything needed to edit/save/watch video clips
 from moviepy.editor import VideoFileClip
-from IPython.display import HTML
 
 
 # In[422]:
@@ -354,20 +354,12 @@ def process_image(lines, image):
     return find_lanes(image, prev_lines=lines)
 
 
-# In[423]:
-
-
-HTML("""
-<video width="960" height="540" controls>
-  <source src="{0}">
-</video>
-""".format(white_output))
-
-
 # Let's try the one with the solid white lane on the right first ...
 
 # In[424]:
 
+if not os.path.exists('test_videos_output'):
+    os.mkdir('test_videos_output')
 
 white_output = 'test_videos_output/solidWhiteRight.mp4'
 ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
@@ -379,8 +371,7 @@ clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
 #white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
 processor = functools.partial(process_image, [[],[]])
 white_clip = clip1.fl_image(processor)
-get_ipython().magic('time white_clip.write_videofile(white_output, audio=False)')
-
+white_clip.write_videofile(white_output, audio=False)
 
 # Play the video inline, or if you prefer find the video in your filesystem (should be in the same directory) and play it in your video player of choice.
 
@@ -404,18 +395,7 @@ yellow_output = 'test_videos_output/solidYellowLeft.mp4'
 clip2 = VideoFileClip('test_videos/solidYellowLeft.mp4')
 processor = functools.partial(process_image, [[],[]])
 yellow_clip = clip2.fl_image(processor)
-get_ipython().magic('time yellow_clip.write_videofile(yellow_output, audio=False)')
-
-
-# In[426]:
-
-
-HTML("""
-<video width="960" height="540" controls>
-  <source src="{0}">
-</video>
-""".format(yellow_output))
-
+yellow_clip.write_videofile(yellow_output, audio=False)
 
 # ## Writeup and Submission
 # 
@@ -438,15 +418,4 @@ challenge_output = 'test_videos_output/challenge.mp4'
 clip3 = VideoFileClip('test_videos/challenge.mp4')
 processor = functools.partial(process_image, [[],[]])
 challenge_clip = clip3.fl_image(processor)
-get_ipython().magic('time challenge_clip.write_videofile(challenge_output, audio=False)')
-
-
-# In[ ]:
-
-
-HTML("""
-<video width="960" height="540" controls>
-  <source src="{0}">
-</video>
-""".format(challenge_output))
-
+challenge_clip.write_videofile(challenge_output, audio=False)

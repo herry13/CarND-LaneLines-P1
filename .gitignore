@@ -1,5 +1,8 @@
 /.ipynb_checkpoints
 .DS_Store
+/.cache
+*.pyc
+.viminfo
 
 /test_images_output
 /test_videos_output
