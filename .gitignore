@@ -1,0 +1,5 @@
+/.ipynb_checkpoints
+.DS_Store
+
+/test_images_output
+/test_videos_output
