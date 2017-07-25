@@ -43,12 +43,13 @@
 
 # ## Import Packages
 
-# In[98]:
+# In[1]:
 
+
+#importing some useful packages
 import matplotlib
 matplotlib.use('Agg')
 
-#importing some useful packages
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
@@ -57,7 +58,7 @@ import cv2
 
 # ## Read in an Image
 
-# In[99]:
+# In[2]:
 
 
 #reading in an image
@@ -86,7 +87,7 @@ import cv2
 
 # Below are some helper functions to help get you started. They should look familiar from the lesson!
 
-# In[418]:
+# In[59]:
 
 
 import math
@@ -136,13 +137,21 @@ def region_of_interest(img, vertices):
     return masked_image
 
 
-def combine_lines(lines, prev_lines=[], use_previous=24, m=3):
+def merge_lines(lines, prev_lines=[], use_previous=24):
+    """
+    Merge a group of detected lines in to a single one.
+    To smooth the line transition from one to the next frame, calculate the average
+    of point-slope of the detected line with the lines found in the last 24 frames.
+    """
     if len(lines) > 0:
         slope = np.mean([s for s,_ in lines])
         c = np.mean([c for _,c in lines])
         prev_lines.append((slope, c))
     else:
         use_previous += 1
+    
+    if len(prev_lines) == 0:
+        return None, None
     
     slope = np.mean([s for s,_ in prev_lines[-use_previous:]])
     c = np.mean([c for _,c in prev_lines[-use_previous:]])
@@ -151,6 +160,11 @@ def combine_lines(lines, prev_lines=[], use_previous=24, m=3):
 
 
 def draw_line(img, slope, c, color=[255, 0, 0], thickness=2, y_ratio=0.6):
+    """
+    Draw a line given its point-slope on `img`.
+    """
+    if slope is None or c is None:
+        return
     y1 = int(img.shape[0])
     x1 = int(float(y1 - c) / slope)
     y2 = int(img.shape[0] * y_ratio)
@@ -158,7 +172,7 @@ def draw_line(img, slope, c, color=[255, 0, 0], thickness=2, y_ratio=0.6):
     cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
     
-def draw_lines(img, lines, prev_lines=None, color=[255, 0, 0], thickness=2,                min_slope=math.tan(math.pi/9.), max_slope=math.tan(math.pi*8/9.)):
+def draw_lines(img, lines, prev_lines=None, color=[255, 0, 0], thickness=2, slope_limit=math.pi/9.):
     """
     NOTE: this is the function you might want to use as a starting point once you want to 
     average/extrapolate the line segments you detect to map out the full
@@ -175,36 +189,35 @@ def draw_lines(img, lines, prev_lines=None, color=[255, 0, 0], thickness=2,     
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
+    
     if prev_lines is None:
+        # Initialize left (`prev_lines[0]`) & right (`prev_lines[1]`) previous lines with
+        # an empty list
         prev_lines = [[],[]]
         
     left_lines = []
     right_lines = []
     for line in lines:
-        slope = []
-        c = []
         for x1,y1,x2,y2 in line:
-            if x1 != x2:
-                m = float(y2 - y1) / float(x2 - x1)
-                if m <= max_slope or m >= min_slope:
-                    slope.append(m)
-                    c.append((y1 + y2 - (m * (x1 + x2))) / 2.)
-        if len(slope) > 0:
-            slope = np.mean(slope)
-            if abs(slope) < min_slope:
+            if x1 == x2:
+                # ignore horizontal line
                 continue
-            c = np.mean(c)
+            slope = float(y2 - y1) / float(x2 - x1)
+            if abs(math.atan(slope)) < slope_limit:
+                # ignore the lines whose abs(slope-angle) is less than 20 degrees
+                continue
+            c = (y1 + y2 - (slope * (x1 + x2))) / 2.
             if slope < 0:
                 left_lines.append((slope, c))
             else:
                 right_lines.append((slope, c))
-    
-    # Draw left line
-    slope, c = combine_lines(left_lines, prev_lines[0])
+
+    # Merge left lines and draw the final left line
+    slope, c = merge_lines(left_lines, prev_lines[0])
     draw_line(img, slope, c, thickness=10)
 
-    # Draw right line
-    slope, c = combine_lines(right_lines, prev_lines[1])
+    # Merge left lines and draw the final right line
+    slope, c = merge_lines(right_lines, prev_lines[1])
     draw_line(img, slope, c, thickness=10)
 
         
@@ -241,7 +254,7 @@ def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
 # Build your pipeline to work on the images in the directory "test_images"  
 # **You should make sure your pipeline works well on these images before you try the videos.**
 
-# In[419]:
+# In[60]:
 
 
 import os
@@ -256,12 +269,15 @@ os.listdir("test_images/")
 # 
 # Try tuning the various parameters, especially the low and high Canny thresholds as well as the Hough lines parameters.
 
-# In[420]:
+# In[69]:
 
 
 # TODO: Build your pipeline that will draw lane lines on the test_images
 # then save them to the test_images directory.
 def vertices_of_region_of_interest(image):
+    """
+    Calculate vertices of the region of interest based on the image's dimension.
+    """
     imshape = image.shape
     horizon_top = imshape[0] * .6
     horizon_width = 50
@@ -270,21 +286,23 @@ def vertices_of_region_of_interest(image):
     return np.array([[(50, imshape[0]),                       (horizon_left, horizon_top),                       (horizon_right, horizon_top),                       (imshape[1]-50, imshape[0])]],                     dtype=np.int32)
 
 
-def canny_thresholds(image):
+def canny_otsu_thresholds(image):
+    """
+    Calculate Canny's low and high thresholds using Otsu's approach.
+    """
     otsu_threshold, _ = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return otsu_threshold / 3, otsu_threshold
 
 
-def find_lanes(image, prev_lines=None):
+def find_lanes(image, prev_lines=None, save_intermediate=False):
     # Convert image to grayscale
     gray = grayscale(image)
     
     # Apply an additional Gaussian smoothing
     blur_gray = gaussian_blur(gray, 5)
-    #blur_gray = gaussian_blur(blur_gray, 5)
     
     # Calculate Canny's low/high thresholding and then apply it
-    low_threshold, high_threshold = canny_thresholds(blur_gray)
+    low_threshold, high_threshold = canny_otsu_thresholds(blur_gray)
     edges = canny(blur_gray, low_threshold, high_threshold)
     
     # Mask the image for the region of interest
@@ -295,11 +313,21 @@ def find_lanes(image, prev_lines=None):
     rho = 1
     theta = np.pi / 180
     threshold, min_line_len, max_line_gap = 30, 20, 2
-    lane_image = hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap, prev_lines)
+    lines_image = hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap, prev_lines)
+    
+    if save_intermediate:
+        plt.imshow(np.dstack([gray.astype(np.uint8)] * 3))
+        plt.savefig('test_images_output/gray.jpg')
+        plt.imshow(np.dstack([edges.astype(np.uint8)] * 3))
+        plt.savefig('test_images_output/edges.jpg')
+        plt.imshow(np.dstack([masked_edges.astype(np.uint8)] * 3))
+        plt.savefig('test_images_output/masked_edges.jpg')
+        plt.imshow(lines_image)
+        plt.savefig('test_images_output/lines.jpg')
     
     #return weighted_img(lane_image, np.dstack([masked_edges.astype(np.uint8)] * 3))
     # Overlay the lanes on the original image
-    return weighted_img(lane_image, image)
+    return weighted_img(lines_image, image)
 
 
 input_dir = 'test_images/'
@@ -311,7 +339,7 @@ for fname in os.listdir(input_dir):
         continue
     image_file = input_dir + fname
     image = image = mpimg.imread(image_file)
-    line_image = find_lanes(image)
+    line_image = find_lanes(image, save_intermediate=(fname == 'solidYellowLeft.jpg'))
     plt.imshow(line_image)
     plt.savefig(output_dir + fname)
 
@@ -336,14 +364,15 @@ for fname in os.listdir(input_dir):
 # ```
 # **Follow the instructions in the error message and check out [this forum post](https://carnd-forums.udacity.com/display/CAR/questions/26218840/import-videofileclip-error) for more troubleshooting tips across operating systems.**
 
-# In[421]:
+# In[62]:
 
 
 # Import everything needed to edit/save/watch video clips
 from moviepy.editor import VideoFileClip
+#from IPython.display import HTML
 
 
-# In[422]:
+# In[63]:
 
 
 def process_image(lines, image):
@@ -354,12 +383,20 @@ def process_image(lines, image):
     return find_lanes(image, prev_lines=lines)
 
 
+# In[64]:
+
+
+#HTML("""
+#<video width="960" height="540" controls>
+#  <source src="{0}">
+#</video>
+#""".format(white_output))
+
+
 # Let's try the one with the solid white lane on the right first ...
 
-# In[424]:
+# In[65]:
 
-if not os.path.exists('test_videos_output'):
-    os.mkdir('test_videos_output')
 
 white_output = 'test_videos_output/solidWhiteRight.mp4'
 ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
@@ -368,10 +405,10 @@ white_output = 'test_videos_output/solidWhiteRight.mp4'
 ## You may also uncomment the following line for a subclip of the first 5 seconds
 ##clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
 clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
-#white_clip = clip1.fl_image(process_image) #NOTE: this function expects color images!!
 processor = functools.partial(process_image, [[],[]])
 white_clip = clip1.fl_image(processor)
 white_clip.write_videofile(white_output, audio=False)
+
 
 # Play the video inline, or if you prefer find the video in your filesystem (should be in the same directory) and play it in your video player of choice.
 
@@ -383,7 +420,7 @@ white_clip.write_videofile(white_output, audio=False)
 
 # Now for the one with the solid yellow lane on the left. This one's more tricky!
 
-# In[425]:
+# In[66]:
 
 
 yellow_output = 'test_videos_output/solidYellowLeft.mp4'
@@ -397,6 +434,17 @@ processor = functools.partial(process_image, [[],[]])
 yellow_clip = clip2.fl_image(processor)
 yellow_clip.write_videofile(yellow_output, audio=False)
 
+
+# In[67]:
+
+
+#HTML("""
+#<video width="960" height="540" controls>
+#  <source src="{0}">
+#</video>
+#""".format(yellow_output))
+
+
 # ## Writeup and Submission
 # 
 # If you're satisfied with your video outputs, it's time to make the report writeup in a pdf or markdown file. Once you have this Ipython notebook ready along with the writeup, it's time to submit for review! Here is a [link](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md) to the writeup template file.
@@ -406,7 +454,7 @@ yellow_clip.write_videofile(yellow_output, audio=False)
 # 
 # Try your lane finding pipeline on the video below.  Does it still work?  Can you figure out a way to make it more robust?  If you're up for the challenge, modify your pipeline so it works with this video and submit it along with the rest of your project!
 
-# In[427]:
+# In[68]:
 
 
 challenge_output = 'test_videos_output/challenge.mp4'
@@ -419,3 +467,14 @@ clip3 = VideoFileClip('test_videos/challenge.mp4')
 processor = functools.partial(process_image, [[],[]])
 challenge_clip = clip3.fl_image(processor)
 challenge_clip.write_videofile(challenge_output, audio=False)
+
+
+# In[ ]:
+
+
+#HTML("""
+#<video width="960" height="540" controls>
+#  <source src="{0}">
+#</video>
+#""".format(challenge_output))
+

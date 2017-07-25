@@ -5,5 +5,5 @@
 .viminfo
 /.bash_history
 
-/test_images_output
-/test_videos_output
+#/test_images_output
+#/test_videos_output
