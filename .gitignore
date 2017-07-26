@@ -4,6 +4,7 @@
 *.pyc
 .viminfo
 /.bash_history
+.python_history
 
 #/test_images_output
 #/test_videos_output
